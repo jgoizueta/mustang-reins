@@ -12,7 +12,7 @@ It started as a clone of [Mustang Amp Control](https://mustang.artnettune.com/) 
 - Shows the signal path. Drag an effect to move it before or after the amp.
 - Follows the amp. When you turn a knob or change a preset on the amp, the screen changes too.
 - Loads and saves the preset slots of the amp (24 on a Mustang I/II, 100 on a III/IV/V).
-- Keeps a library of presets in the browser, in collections. It imports `.fuse` files, folders and `.zip` files, and exports `.fuse` files. The app ships no presets.
+- Keeps a library of presets in the browser, in collections. It imports `.fuse` files, folders and `.zip` files, and exports `.fuse` files and `.zip` files of collections and banks. The app ships no presets.
 - Has a tuner and an optional MIDI input that follows the MIDX-20 map.
 - Works offline as an installed app (PWA).
 - Has a built-in help dialog.

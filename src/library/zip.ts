@@ -53,7 +53,7 @@ export function zip(files: { name: string; data: Uint8Array }[]): Uint8Array {
   return cat(...chunks)
 }
 
-const sanitize = (s: string) => s.replace(/[^\w\-. ]+/g, '_').trim() || 'bank'
+const sanitize = (s: string, fallback = 'bank') => s.replace(/[^\w\-. ]+/g, '_').trim() || fallback
 
 /**
  * The zip bytes of a FUSE backup folder for this bank. `isV2` picks the M2_/MU_ name-file prefix.
@@ -75,11 +75,40 @@ export function bankZip(bank: Collection, entries: LibraryEntry[], isV2: boolean
 
 /** Save the bank as a `<bank name>.zip` download. */
 export function exportBank(bank: Collection, entries: LibraryEntry[], isV2: boolean) {
-  const blob = new Blob([bankZip(bank, entries, isV2) as Uint8Array<ArrayBuffer>], { type: 'application/zip' })
+  download(`${sanitize(bank.name)}.zip`, bankZip(bank, entries, isV2))
+}
+
+/**
+ * The zip bytes of a normal collection: `<name>/<preset>.fuse` per entry, in the order the panel
+ * shows them. Re-importing it rebuilds the collection (never a bank: there is no `Presets/` folder).
+ * Duplicate file names get ` (2)`, ` (3)`… before `.fuse`.
+ */
+export function collectionZip(collection: Collection, entries: LibraryEntry[]): Uint8Array {
+  const dir = sanitize(collection.name, 'collection')
+  const enc = new TextEncoder()
+  const files: { name: string; data: Uint8Array }[] = []
+  const used = new Map<string, number>()
+  for (const e of entries) {
+    const base = fuseFileName(e.preset).replace(/\.fuse$/i, '')
+    const key = base.toLowerCase() // macOS and Windows treat names that differ only in case as the same file
+    const n = (used.get(key) ?? 0) + 1
+    used.set(key, n)
+    files.push({ name: `${dir}/${n === 1 ? base : `${base} (${n})`}.fuse`, data: enc.encode(serializeFuse(e.preset)) })
+  }
+  return zip(files)
+}
+
+/** Save the collection as a `<collection name>.zip` download. */
+export function exportCollection(collection: Collection, entries: LibraryEntry[]) {
+  download(`${sanitize(collection.name, 'collection')}.zip`, collectionZip(collection, entries))
+}
+
+function download(fileName: string, bytes: Uint8Array) {
+  const blob = new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/zip' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `${sanitize(bank.name)}.zip`
+  a.download = fileName
   a.click()
   URL.revokeObjectURL(url)
 }

@@ -120,6 +120,39 @@ describe('LibraryPanel', () => {
     expect(onMark).toHaveBeenCalled()
   })
 
+  it('exports a normal collection as .zip, disabled when empty', async () => {
+    const user = userEvent.setup()
+    const store = await makeStore()
+    const c = store.addCollection('Gigs')!
+    await renderPanel({}, store)
+    // Empty collection: the item is there but disabled.
+    await user.click(await screen.findByText('GIGS · 0'))
+    await user.click(screen.getByTitle('Collection actions'))
+    const disabledItem = (await screen.findByText('Export .zip')).closest('[role="menuitem"]')!
+    expect(disabledItem.getAttribute('aria-disabled')).toBe('true')
+
+    store.add(c.id, [newPreset('One'), newPreset('Two')])
+    cleanup()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const createUrl = vi.fn(() => 'blob:test')
+    const revoke = vi.fn()
+    const prevCreate = URL.createObjectURL, prevRevoke = URL.revokeObjectURL
+    URL.createObjectURL = createUrl as never
+    URL.revokeObjectURL = revoke as never
+    try {
+      await renderPanel({}, store)
+      await user.click(await screen.findByText('GIGS · 2'))
+      await user.click(screen.getByTitle('Collection actions'))
+      await user.click(await screen.findByText('Export .zip'))
+      expect(createUrl).toHaveBeenCalled()
+      expect(click).toHaveBeenCalled()
+    } finally {
+      click.mockRestore()
+      URL.createObjectURL = prevCreate
+      URL.revokeObjectURL = prevRevoke
+    }
+  })
+
   it('offers the four add actions in the + menu', async () => {
     const user = userEvent.setup()
     await renderPanel()
@@ -193,7 +226,7 @@ describe('banks', () => {
     await renderPanel({}, store)
     await user.click(screen.getByText('PLAIN · 1'))
     await user.click(screen.getByTitle('Collection actions'))
-    expect(screen.queryByText('Export .zip')).toBeNull()
+    expect(screen.queryByText('Export ORG as 8-bank')).toBeNull()
     expect(screen.queryByText(/Write to amp/)).toBeNull()
     expect(bank.bank).toBeTruthy()
   })

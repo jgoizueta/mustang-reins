@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { newPreset } from '../protocol/preset'
+import { newPreset, samePreset } from '../protocol/preset'
 import { unzip, importFiles } from './import'
-import { bankZip, zip } from './zip'
+import { bankZip, collectionZip, zip } from './zip'
 import { LibraryStore, memoryBackend, type Collection, type LibraryEntry } from './store'
 
 const entry = (collectionId: string, position: number, name: string): LibraryEntry => ({
@@ -52,6 +52,51 @@ describe('bankZip → unzip → import round trip', () => {
     const buf = bankZip(bank, [], false)
     const names = centralNames(buf)
     expect(names).toEqual(['My Gig/MU_BackupName.fuse'])
+  })
+})
+
+const plainEntry = (collectionId: string, i: number, name: string, gain = 0): LibraryEntry => ({
+  id: `e-${i}`, collectionId, savedAt: i,
+  preset: { ...newPreset(name), amp: { ...newPreset('x').amp, gain } }, search: name.toLowerCase(),
+})
+
+describe('collectionZip → unzip → import round trip', () => {
+  it('re-imports one normal collection with the same presets, no bank', async () => {
+    const coll: Collection = { id: 'c1', name: 'Gig', createdAt: 0 }
+    const entries = [
+      plainEntry('c1', 0, 'Solo', 111),
+      plainEntry('c1', 1, 'Solo', 222), // same name, different settings
+      plainEntry('c1', 2, 'Clean', 33),
+    ]
+    const files = await unzip(collectionZip(coll, entries).buffer as ArrayBuffer)
+    const paths = files.map((f) => f.path).sort()
+    expect(paths).toEqual(['Gig/Clean.fuse', 'Gig/Solo (2).fuse', 'Gig/Solo.fuse'])
+
+    const store = new LibraryStore(memoryBackend())
+    await store.ready
+    const r = await importFiles(store, files, null)
+    expect(r.banks).toEqual({ added: 0, skipped: 0, presets: 0 })
+    const colls = store.getSnapshot().collections.filter((c) => !c.bank && c.name === 'Gig')
+    expect(colls).toHaveLength(1)
+    const es = store.getSnapshot().entries.filter((e) => e.collectionId === colls[0].id)
+    expect(es).toHaveLength(3)
+    for (const src of entries) expect(es.some((e) => e.preset.name === src.preset.name && samePreset(e.preset, src.preset))).toBe(true)
+    expect(es.filter((e) => e.preset.name === 'Solo')).toHaveLength(2) // duplicate file name kept
+  })
+
+  it('a collection named "Presets" with NN_ preset names is not a bank', async () => {
+    const coll: Collection = { id: 'c1', name: 'Presets', createdAt: 0 }
+    const entries = [plainEntry('c1', 0, '17_Foo', 55), plainEntry('c1', 1, '03_Bar', 66)]
+    const files = await unzip(collectionZip(coll, entries).buffer as ArrayBuffer)
+    const store = new LibraryStore(memoryBackend())
+    await store.ready
+    const r = await importFiles(store, files, null)
+    expect(r.banks).toEqual({ added: 0, skipped: 0, presets: 0 })
+    expect(store.getSnapshot().collections.some((c) => c.bank)).toBe(false)
+    const colls = store.getSnapshot().collections.filter((c) => c.name === 'Presets')
+    expect(colls).toHaveLength(1)
+    const names = store.getSnapshot().entries.filter((e) => e.collectionId === colls[0].id).map((e) => e.preset.name).sort()
+    expect(names).toEqual(['03_Bar', '17_Foo'])
   })
 })
 

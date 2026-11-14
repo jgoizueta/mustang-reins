@@ -4,7 +4,7 @@ import { ChevronDown, Download, FilePlus2, FolderInput, HardDriveDownload, HardD
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { droppedFiles, importFiles, sourceFiles, type ImportResult } from '../library/import'
 import { library as defaultLibrary, type Collection, type LibraryEntry, type LibraryStore } from '../library/store'
-import { exportBank } from '../library/zip'
+import { exportBank, exportCollection } from '../library/zip'
 import { BANKS, bankPositionLabel, LETTERS, slotLabel } from '../data/slots'
 import { exportFuse } from '../fuse/fuse'
 import { newPreset, samePreset, type Preset } from '../protocol/preset'
@@ -339,6 +339,12 @@ export function LibraryPanel({ current, onLoad, activeId, onMark, onClose, store
                       <Menu.Content align="start" sideOffset={4}
                         className="z-50 min-w-48 rounded-md border border-border bg-card p-1 text-foreground shadow-xl">
                         <Menu.Item className={itemClass} onSelect={() => setRenamingCollection(c.id)}>Rename</Menu.Item>
+                        {!c.bank && (
+                          <Menu.Item className={itemClass} disabled={countFor(c.id) === 0}
+                            onSelect={() => exportCollection(c, entries.filter((e) => e.collectionId === c.id))}>
+                            <Download className="mr-2 size-4" /> Export .zip
+                          </Menu.Item>
+                        )}
                         {c.bank && (
                           <>
                             <Menu.Item className={itemClass} onSelect={() => exportBank(c, bankEntries(c.id), !amp?.connected || amp.isV2)}>
