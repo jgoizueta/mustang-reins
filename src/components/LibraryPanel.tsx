@@ -164,7 +164,7 @@ export function LibraryPanel({ current, onLoad, activeId, onMark, onClose, store
       const res = await amp.backupSlots(slots, progress, signal)
       if (!res.length) { setError('Backup cancelled — nothing was read.'); return }
       const bank = store.addBank(name, size)
-      for (const r of res) store.putAt(bank.id, r.slot, r.preset)
+      for (const r of res) store.putAt(bank.id, slots.indexOf(r.slot), r.preset)
       setSelected(bank.id)
       setSummary(`Backed up ${res.length} presets to “${bank.name}”`)
     })

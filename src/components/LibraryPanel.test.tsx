@@ -216,4 +216,23 @@ describe('banks', () => {
     const bank = store.getSnapshot().collections.find((c) => c.bank && c.name.startsWith('Backup '))!
     expect(store.entryAt(bank.id, 23)!.preset.name).toBe('Amp 23')
   })
+
+  it('Back up RED fills positions 0-7 of the new 8-bank', async () => {
+    const user = userEvent.setup()
+    const store = await renderPanel({
+      amp: {
+        connected: true, slotCount: 24, isV2: true,
+        backupSlots: vi.fn(async (slots: number[], progress?: (d: number, t: number) => void) => {
+          progress?.(slots.length, slots.length)
+          return slots.map((slot) => ({ slot, preset: newPreset(`Amp ${slot}`) }))
+        }),
+        restoreSlots: vi.fn(),
+      },
+    }, await makeStore())
+    await user.click(screen.getByTitle('Add to library'))
+    await user.click(screen.getByText('Back up RED'))
+    await waitFor(() => expect(store.getSnapshot().collections.some((c) => c.bank?.size === 8)).toBe(true))
+    const bank = store.getSnapshot().collections.find((c) => c.bank?.size === 8)!
+    for (let pos = 0; pos < 8; pos++) expect(store.entryAt(bank.id, pos)!.preset.name).toBe(`Amp ${16 + pos}`)
+  })
 })
