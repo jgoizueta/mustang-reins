@@ -59,11 +59,13 @@ export interface SessionOptions {
   slotLoadTimeoutMs?: number
   /** During a bank write, wait this long for the amp's ack (`00 00 1c …`) after each write packet. */
   ackTimeoutMs?: number
+  /** During a bank write, pause this long after the save packet: the amp sends no reply to it but needs a moment to store the slot. */
+  saveSettleMs?: number
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-/** The amp answers each write packet (preset fields and the save command) with this report. */
+/** The amp answers each `1c 03 …` write packet (preset fields and apply) with this report; the save gets none. */
 const isWriteAck = (p: Uint8Array) => p[0] === 0 && p[1] === 0 && p[2] === 0x1c
 
 export class AmpSession {
@@ -640,12 +642,15 @@ export class AmpSession {
           const loaded = await this.readUntil(t,
             (p) => p[0] === 0x1c && p[1] === 1 && p[2] === 0 && p[4] === it.slot, this.opts.slotLoadTimeoutMs ?? 1500)
           if (!loaded) this.opts.debug?.('note', `No reply from the amp to the slot select (slot ${label})`)
-          // The amp acks each write (`00 00 1c …`). Some acks go missing, so a timeout just continues.
-          for (const p of [...encodePreset(it.preset), packets.savePreset(it.slot, it.preset.name)]) {
+          // The amp acks each `1c 03 …` write (`00 00 1c …`). Some acks go missing, so a timeout just continues.
+          for (const p of encodePreset(it.preset)) {
             await this.tx(t, p)
             const acked = await this.readUntil(t, isWriteAck, this.opts.ackTimeoutMs ?? 100)
             if (!acked) this.opts.debug?.('note', `No reply from the amp to a preset write (slot ${label})`)
           }
+          await this.tx(t, packets.savePreset(it.slot, it.preset.name))
+          // The amp sends no reply to the save; pause so it can store the slot before the next select.
+          await wait(this.opts.saveSettleMs ?? 100)
           written.add(it.slot)
           const names = [...this.snap.presetNames]
           names[it.slot] = it.preset.name

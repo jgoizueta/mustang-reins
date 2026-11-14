@@ -413,7 +413,7 @@ describe('bank backup/restore', () => {
   })
 
   it('writes presets into slots and updates presetNames', async () => {
-    const { session, sim } = setup()
+    const { session, sim, notes } = setup()
     await session.connect()
     await session.restoreSlots([
       { slot: 0, preset: { ...newPreset('Bank A'), amp: { ...newPreset('x').amp, gain: 111 } } },
@@ -425,6 +425,7 @@ describe('bank backup/restore', () => {
     const s = session.getSnapshot()
     expect(s.presetNames.slice(0, 2)).toEqual(['Bank A', 'Bank B'])
     expect(s.activeSlot).toBe(3) // the editor stayed on its slot
+    expect(notes.filter((n) => n.startsWith('No reply'))).toHaveLength(0) // all writes acked
   })
 
   it('pushes a dirty editor preset back onto the amp after the run', async () => {
@@ -482,22 +483,25 @@ describe('bank backup/restore', () => {
   it('waits for the slot reply and each write ack before sending the next packet', async () => {
     const sim = new SimulatedTransport(DEVICES[2], 15)
     const session = new AmpSession({ createTransport: () => sim, handshakeMs: 5, receiveMs: 20, autoReconnect: false,
-      slotLoadTimeoutMs: 500, ackTimeoutMs: 200 })
+      slotLoadTimeoutMs: 500, ackTimeoutMs: 200, saveSettleMs: 5 })
     await session.connect()
     sim.log.length = 0
     await session.restoreSlots([{ slot: 0, preset: newPreset('T0') }, { slot: 1, preset: newPreset('T1') }])
     const isTrailer = (p: Uint8Array, slot: number) => p[0] === 0x1c && p[1] === 1 && p[2] === 0 && p[4] === slot
     const isAck = (p: Uint8Array) => p[0] === 0 && p[1] === 0 && p[2] === 0x1c
     const isSelect = (p: Uint8Array) => p[0] === 0x1c && p[1] === 1 && p[2] === 1
+    const isSave = (p: Uint8Array) => p[0] === 0x1c && p[1] === 1 && p[2] === 3
     const writeTxs: number[] = []
-    sim.log.forEach((e, i) => { if (e.dir === 'tx' && !isSelect(e.p)) writeTxs.push(i) })
-    // No packet goes out while a reply is still pending: every tx follows an rx.
+    sim.log.forEach((e, i) => { if (e.dir === 'tx' && !isSelect(e.p) && !isSave(e.p)) writeTxs.push(i) })
+    // No `1c 03 …` write goes out while a reply is still pending: each one follows an rx.
     for (const i of writeTxs) expect(sim.log[i - 1]?.dir, `tx #${i}`).toBe('rx')
     // The first write of each slot waits for that slot's trailer; each later write waits for the previous ack.
     expect(isTrailer(sim.log[writeTxs[0] - 1].p, 0)).toBe(true)
     expect(isAck(sim.log[writeTxs[1] - 1].p)).toBe(true)
-    const slot1Writes = sim.log.findIndex((e) => e.dir === 'tx' && isSelect(e.p) && e.p[4] === 1)
-    const firstSlot1Write = writeTxs.find((i) => i > slot1Writes)!
+    // The save gets no ack: the next slot's select follows it after the settle pause.
+    const slot1Select = sim.log.findIndex((e) => e.dir === 'tx' && isSelect(e.p) && e.p[4] === 1)
+    expect(isSave(sim.log[slot1Select - 1].p)).toBe(true)
+    const firstSlot1Write = writeTxs.find((i) => i > slot1Select)!
     expect(isTrailer(sim.log[firstSlot1Write - 1].p, 1)).toBe(true)
   })
 
@@ -506,14 +510,15 @@ describe('bank backup/restore', () => {
     sim.dropAcks = true
     const notes: string[] = []
     const session = new AmpSession({ createTransport: () => sim, handshakeMs: 5, receiveMs: 20, autoReconnect: false,
-      ackTimeoutMs: 10, slotLoadTimeoutMs: 200,
+      ackTimeoutMs: 10, slotLoadTimeoutMs: 200, saveSettleMs: 5,
       debug: (dir, data) => { if (dir === 'note') notes.push(String(data)) } })
     await session.connect()
     await session.restoreSlots([{ slot: 0, preset: { ...newPreset('Bank X'), amp: { ...newPreset('x').amp, gain: 123 } } }])
     expect(sim.presets[0].name).toBe('Bank X')
     expect(sim.presets[0].amp.gain).toBe(123)
     expect(session.getSnapshot().presetNames[0]).toBe('Bank X')
-    expect(notes.filter((n) => n.startsWith('No reply')).length).toBe(13)
+    // 12 `1c 03 …` writes per slot; the save gets no ack and logs nothing.
+    expect(notes.filter((n) => n.startsWith('No reply')).length).toBe(12)
   })
 
   it('requires a connection and live sync', async () => {

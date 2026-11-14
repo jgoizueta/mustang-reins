@@ -38,7 +38,7 @@ export class SimulatedTransport implements Transport {
   readonly sent: Uint8Array[] = []
   /** Accept sends but never produce any packet, like an amp whose USB is held by another app. */
   mute = false
-  /** Do not send the write acks (a real amp loses some of them; bank writes must not depend on them). */
+  /** Do not send the write acks (a real amp loses some of them; bank writes must not depend on them). The save packet never gets one anyway. */
   dropAcks = false
   /** Ordered record of host sends (`tx`) and emitted packets (`rx`), for ordering assertions. */
   readonly log: { dir: 'tx' | 'rx'; p: Uint8Array }[] = []
@@ -111,7 +111,7 @@ export class SimulatedTransport implements Transport {
       this.emit([...this.stateBlock(this.active), slotTrailer(this.active)])
     } else if (a === 0x1c && b === 1 && c === 3) {
       this.presets[p[4]] = { ...this.presets[this.active], name: String.fromCharCode(...p.slice(16, 48)).replace(/\0.*$/, '') }
-      this.ack()
+      // A real amp sends no ack to the save packet.
     } else if (a === 0x1c && b === 3 && c === 5) {
       const pr = this.presets[this.active]
       pr.amp = { ...pr.amp, model: p[16], volume: p[32], gain: p[33], gain2: p[34], masterVolume: p[35], treble: p[36],
