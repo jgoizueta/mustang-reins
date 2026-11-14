@@ -8,7 +8,7 @@ Project notes for coding agents. Keep this file up to date as work continues. Pe
 - Stack: Vite + React + TS + Tailwind v4 + Radix.
 - The user wants an exact visual clone, with an own placeholder logo (not the Fender logo).
 - The user tests on a real Mustang I/II (v1). Details in `AGENTS.local.md`.
-- Repo is a local git repo. Commits carry a Co-Authored-By trailer.
+- Commits carry a Co-Authored-By trailer.
 
 ## Commands
 
@@ -26,7 +26,7 @@ Project notes for coding agents. Keep this file up to date as work continues. Pe
 
 - The help text (`src/help/help.md`) and the screenshots in `public/help/` were rewritten and retaken on 2026-11-14 for the open-source release. Nothing from alf45tar/Fender-Mustang-Control-App is left (it has no license and no permission was given).
 - The app ships no presets (decided 2026-11-13). The 9,906 `.fuse` files once in `public/library/` (from mustang.artnettune.com/library, which got them from Shane's archive at guitarpedaldemos.com/fender-fuse-mustang-v2-archive: community `archive/`, Fender `factory/`, `intheblues/`) were deleted from the repo; the user keeps a local copy for import into the Library. Git history before that commit still has them.
-- Open source: MIT license (`LICENSE`, Copyright (c) 2026 Javier Goizueta). Public repo planned as `mustang-reins` with a new squashed history; the private repo `mustang` keeps the full history (it has the old alf45tar help and the 9,906 presets). GitHub Pages at https://jgoizueta.net/mustang-reins/ via `.github/workflows/pages.yml`, built with `--base=/mustang-reins/`. Local dev and preview stay at `/`. A small preset set may be added later (intheblues has the author's permission; factory is Fender's).
+- Open source: MIT license (`LICENSE`, Copyright (c) 2026 Javier Goizueta). Work happens in the public repo `jgoizueta/mustang-reins` (remote `origin`, branch `main`), which started on 2026-11-14 with one squashed commit. The private repo `jgoizueta/mustang` keeps the full earlier history (it has the old alf45tar help and the 9,906 presets); its histories are unrelated to the public one, so never push between them. GitHub Pages at https://jgoizueta.net/mustang-reins/ via `.github/workflows/pages.yml`, built with `--base=/mustang-reins/`. Local dev and preview stay at `/`. A small preset set may be added later (intheblues has the author's permission; factory is Fender's).
 - Do not execute code taken from the downloaded original bundle. Parse it as data instead.
 - `scripts/gen_effects.py` generates `src/data/effects.ts` from the original `parser.worker-*.js` bundle (usage in the file header). On 2026-11-12 its output was identical to the committed file.
 
