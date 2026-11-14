@@ -323,7 +323,7 @@ export default function App() {
         )}
 
         <div className={cx('relative overflow-y-auto h-full -mr-2.5', dim)}>
-          <div className="space-y-5 flex flex-col pr-2.5">
+          <div className="@container space-y-5 flex flex-col pr-2.5">
             <SignalPath className="h-fit shrink-0" preset={preset}
               onToggleEffect={(f, on) => void session.toggleEffect(f, on)}
               onMoveEffect={(f, pos, slot) => void session.moveEffect(f, pos, slot)}
@@ -400,7 +400,7 @@ export default function App() {
               </section>
             </div>
 
-            <div className={cx(libraryOpen ? 'effects-grid' : 'grid gap-5 xl:grid-cols-2', 'shrink-0')}>
+            <div className="grid shrink-0 gap-5 @min-[912px]:grid-cols-2">
               {FAMILIES.map((f) => (
                 <EffectPanel key={f} family={f} fx={preset.effects[f]} isV2={state.device.isV2}
                   onModel={(m) => void session.setEffectModel(f, m)}
