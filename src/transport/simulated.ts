@@ -12,6 +12,20 @@ function namePacket(slot: number, name: string): Uint8Array {
   return p
 }
 
+/** The report that ends the amp's answer to a slot select (`1c 01 00 00 <slot>`). */
+function slotTrailer(slot: number): Uint8Array {
+  const p = new Uint8Array(64)
+  p.set([0x1c, 1, 0, 0, slot])
+  return p
+}
+
+/** The ack a real amp sends after each write packet (`00 00 1c …` "Jun 11 2012"). */
+function writeAck(): Uint8Array {
+  const p = new Uint8Array(64)
+  p.set([0, 0, 0x1c, 0, 0x4a, 0x75, 0x6e, 0x20, 0x31, 0x31, 0x20, 0x32, 0x30, 0x31, 0x32, 0, 0, 0, 0, 0, 0x0b])
+  return p
+}
+
 export class SimulatedTransport implements Transport {
   readonly kind = 'Simulated' as const
   private rx = new PacketQueue()
@@ -24,6 +38,10 @@ export class SimulatedTransport implements Transport {
   readonly sent: Uint8Array[] = []
   /** Accept sends but never produce any packet, like an amp whose USB is held by another app. */
   mute = false
+  /** Do not send the write acks (a real amp loses some of them; bank writes must not depend on them). */
+  dropAcks = false
+  /** Ordered record of host sends (`tx`) and emitted packets (`rx`), for ordering assertions. */
+  readonly log: { dir: 'tx' | 'rx'; p: Uint8Array }[] = []
 
   private readonly device: DeviceInfo
   private readonly delayMs: number
@@ -50,9 +68,13 @@ export class SimulatedTransport implements Transport {
   }
 
   private emit(list: Uint8Array[]) {
-    const run = () => list.forEach((p) => this.open_ && this.rx.push(p))
+    const run = () => list.forEach((p) => { if (this.open_) { this.log.push({ dir: 'rx', p }); this.rx.push(p) } })
     if (this.delayMs) setTimeout(run, this.delayMs)
     else queueMicrotask(run)
+  }
+
+  private ack() {
+    if (!this.dropAcks) this.emit([writeAck()])
   }
 
   private stateBlock(slot: number): Uint8Array[] {
@@ -67,6 +89,7 @@ export class SimulatedTransport implements Transport {
   async send(p: Uint8Array) {
     if (!this.open_) throw new Error('Not connected')
     this.sent.push(p)
+    this.log.push({ dir: 'tx', p })
     if (this.mute) return
     const [a, b, c] = p
     if (a === 0x0a) {
@@ -85,20 +108,27 @@ export class SimulatedTransport implements Transport {
       this.emit(out)
     } else if (a === 0x1c && b === 1 && c === 1) {
       this.active = p[4]
-      this.emit(this.stateBlock(this.active))
+      this.emit([...this.stateBlock(this.active), slotTrailer(this.active)])
     } else if (a === 0x1c && b === 1 && c === 3) {
       this.presets[p[4]] = { ...this.presets[this.active], name: String.fromCharCode(...p.slice(16, 48)).replace(/\0.*$/, '') }
+      this.ack()
     } else if (a === 0x1c && b === 3 && c === 5) {
       const pr = this.presets[this.active]
       pr.amp = { ...pr.amp, model: p[16], volume: p[32], gain: p[33], gain2: p[34], masterVolume: p[35], treble: p[36],
         middle: p[37], bass: p[38], presence: p[39], depth: p[41], bias: p[42], cabinet: p[49], sag: p[51], brightness: p[52] }
+      this.ack()
     } else if (a === 0x1c && b === 3 && c === 13) {
       this.presets[this.active].usbGain = p[16]
+      this.ack()
     } else if (a === 0x1c && b === 3 && Object.values(DSP).includes(c)) {
       const fam = FAMILIES.find((f) => DSP[f] === c)!
       const model = p[16] | (p[17] << 8)
       this.presets[this.active].effects[fam] = { model, slot: p[18] > 3 ? p[18] - 4 : p[18],
         position: p[18] > 3 ? 'post' : 'pre', enabled: model !== 0 && p[22] === 0, knobs: Array.from(p.slice(32, 38)) }
+      this.ack()
+    } else if (a === 0x1c && b === 3) {
+      // Other writes (clear-effect, the `1c 03 00` apply packet) change nothing here but still get the ack.
+      this.ack()
     }
   }
 

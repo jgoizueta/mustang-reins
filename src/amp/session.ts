@@ -7,6 +7,7 @@ import {
 import type { EffectFamily, EffectSettings, AmpSettings } from '../protocol/packets'
 import { ampById } from '../data/amps'
 import { effectById } from '../data/effects'
+import { slotLabel } from '../data/slots'
 import { OFFLINE_DEVICE, type Transport } from '../transport/types'
 
 export type LinkState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -54,9 +55,16 @@ export interface SessionOptions {
   tunerIgnoreMs?: number
   /** Wait for the amp to answer each handshake packet. */
   handshakeMs?: number
+  /** During a bank write, wait this long for the state block of a selected slot (the `1c 01 00 00 <slot>` trailer). */
+  slotLoadTimeoutMs?: number
+  /** During a bank write, wait this long for the amp's ack (`00 00 1c …`) after each write packet. */
+  ackTimeoutMs?: number
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** The amp answers each write packet (preset fields and the save command) with this report. */
+const isWriteAck = (p: Uint8Array) => p[0] === 0 && p[1] === 0 && p[2] === 0x1c
 
 export class AmpSession {
   private snap: SessionSnapshot = {
@@ -625,10 +633,19 @@ export class AmpSession {
         for (let i = 0; i < items.length; i++) {
           if (signal?.aborted) break
           const it = items[i]
-          await this.tx(t, packets.selectPreset(it.slot))
+          const label = slotLabel(it.slot)
           t.drain()
-          for (const p of encodePreset(it.preset)) await this.tx(t, p)
-          await this.tx(t, packets.savePreset(it.slot, it.preset.name))
+          await this.tx(t, packets.selectPreset(it.slot))
+          // The amp loads the slot, then answers with its state block ending in the `1c 01 00 00 <slot>` trailer.
+          const loaded = await this.readUntil(t,
+            (p) => p[0] === 0x1c && p[1] === 1 && p[2] === 0 && p[4] === it.slot, this.opts.slotLoadTimeoutMs ?? 1500)
+          if (!loaded) this.opts.debug?.('note', `No reply from the amp to the slot select (slot ${label})`)
+          // The amp acks each write (`00 00 1c …`). Some acks go missing, so a timeout just continues.
+          for (const p of [...encodePreset(it.preset), packets.savePreset(it.slot, it.preset.name)]) {
+            await this.tx(t, p)
+            const acked = await this.readUntil(t, isWriteAck, this.opts.ackTimeoutMs ?? 100)
+            if (!acked) this.opts.debug?.('note', `No reply from the amp to a preset write (slot ${label})`)
+          }
           written.add(it.slot)
           const names = [...this.snap.presetNames]
           names[it.slot] = it.preset.name
@@ -640,6 +657,18 @@ export class AmpSession {
         this.busy = false
       }
     })
+  }
+
+  /** Read packets until `match` is true or the deadline passes. Packets that do not match are skipped. */
+  private async readUntil(t: Transport, match: (p: Uint8Array) => boolean, timeoutMs: number): Promise<boolean> {
+    const end = Date.now() + timeoutMs
+    for (;;) {
+      const left = end - Date.now()
+      if (left <= 0) return false
+      const p = await t.receive(left)
+      if (!p) return false
+      if (match(p)) return true
+    }
   }
 
   private ignoreTuner = false

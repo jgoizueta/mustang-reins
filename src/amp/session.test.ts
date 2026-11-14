@@ -479,6 +479,43 @@ describe('bank backup/restore', () => {
     expect(session.getSnapshot().presetNames[1]).not.toBe('W1')
   })
 
+  it('waits for the slot reply and each write ack before sending the next packet', async () => {
+    const sim = new SimulatedTransport(DEVICES[2], 15)
+    const session = new AmpSession({ createTransport: () => sim, handshakeMs: 5, receiveMs: 20, autoReconnect: false,
+      slotLoadTimeoutMs: 500, ackTimeoutMs: 200 })
+    await session.connect()
+    sim.log.length = 0
+    await session.restoreSlots([{ slot: 0, preset: newPreset('T0') }, { slot: 1, preset: newPreset('T1') }])
+    const isTrailer = (p: Uint8Array, slot: number) => p[0] === 0x1c && p[1] === 1 && p[2] === 0 && p[4] === slot
+    const isAck = (p: Uint8Array) => p[0] === 0 && p[1] === 0 && p[2] === 0x1c
+    const isSelect = (p: Uint8Array) => p[0] === 0x1c && p[1] === 1 && p[2] === 1
+    const writeTxs: number[] = []
+    sim.log.forEach((e, i) => { if (e.dir === 'tx' && !isSelect(e.p)) writeTxs.push(i) })
+    // No packet goes out while a reply is still pending: every tx follows an rx.
+    for (const i of writeTxs) expect(sim.log[i - 1]?.dir, `tx #${i}`).toBe('rx')
+    // The first write of each slot waits for that slot's trailer; each later write waits for the previous ack.
+    expect(isTrailer(sim.log[writeTxs[0] - 1].p, 0)).toBe(true)
+    expect(isAck(sim.log[writeTxs[1] - 1].p)).toBe(true)
+    const slot1Writes = sim.log.findIndex((e) => e.dir === 'tx' && isSelect(e.p) && e.p[4] === 1)
+    const firstSlot1Write = writeTxs.find((i) => i > slot1Writes)!
+    expect(isTrailer(sim.log[firstSlot1Write - 1].p, 1)).toBe(true)
+  })
+
+  it('finishes the restore when the amp drops its acks', async () => {
+    const sim = new SimulatedTransport()
+    sim.dropAcks = true
+    const notes: string[] = []
+    const session = new AmpSession({ createTransport: () => sim, handshakeMs: 5, receiveMs: 20, autoReconnect: false,
+      ackTimeoutMs: 10, slotLoadTimeoutMs: 200,
+      debug: (dir, data) => { if (dir === 'note') notes.push(String(data)) } })
+    await session.connect()
+    await session.restoreSlots([{ slot: 0, preset: { ...newPreset('Bank X'), amp: { ...newPreset('x').amp, gain: 123 } } }])
+    expect(sim.presets[0].name).toBe('Bank X')
+    expect(sim.presets[0].amp.gain).toBe(123)
+    expect(session.getSnapshot().presetNames[0]).toBe('Bank X')
+    expect(notes.filter((n) => n.startsWith('No reply')).length).toBe(13)
+  })
+
   it('requires a connection and live sync', async () => {
     const { session } = setup()
     await expect(session.backupSlots([0])).rejects.toThrow('Connect the amp first')
