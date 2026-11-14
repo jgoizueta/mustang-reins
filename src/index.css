@@ -1,0 +1,115 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter-tight';
+@import '@fontsource-variable/jetbrains-mono';
+
+@theme inline {
+  --font-sans: 'Inter Tight Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, SFMono-Regular, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-panel: var(--panel);
+  --color-rail: var(--rail);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-signal: var(--signal);
+  --color-slot-stomp: var(--slot-stomp);
+  --color-slot-mod: var(--slot-mod);
+  --color-slot-delay: var(--slot-delay);
+  --color-slot-reverb: var(--slot-reverb);
+  --color-online: var(--online);
+  --color-offline: var(--offline);
+  --color-warning: var(--warning);
+  --shadow-panel: 0 1px 0 0 oklch(100% 0 0 / 0.06) inset, 0 12px 30px -18px oklch(0% 0 0 / 0.9);
+  --shadow-knob: 0 6px 14px -6px oklch(0% 0 0 / 0.85), 0 1px 0 0 oklch(100% 0 0 / 0.1) inset;
+  --radius-lg: var(--radius);
+}
+
+:root {
+  color-scheme: dark;
+  --radius: 0.5rem;
+  --background: oklch(16% 0.006 250);
+  --foreground: oklch(93% 0.004 250);
+  --card: oklch(20.5% 0.007 250);
+  --panel: oklch(22.5% 0.007 250);
+  --rail: oklch(13% 0.006 250);
+  --primary: oklch(78% 0.16 68);
+  --primary-foreground: oklch(18% 0.02 60);
+  --secondary: oklch(27% 0.008 250);
+  --muted: oklch(25% 0.007 250);
+  --muted-foreground: oklch(66% 0.01 250);
+  --accent: oklch(30% 0.01 250);
+  --destructive: oklch(60% 0.2 25);
+  --border: oklch(30% 0.008 250);
+  --input: oklch(28% 0.008 250);
+  --ring: oklch(78% 0.16 68);
+  --signal: oklch(80% 0.17 70);
+  --slot-stomp: oklch(72% 0.17 30);
+  --slot-mod: oklch(74% 0.14 200);
+  --slot-delay: oklch(75% 0.15 150);
+  --slot-reverb: oklch(72% 0.14 285);
+  --online: oklch(75% 0.16 150);
+  --offline: oklch(50% 0.02 250);
+  --warning: oklch(79% 0.15 75);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+.effects-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+@media (width >= 1750px) {
+  .effects-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.panel-surface {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+  background-image: linear-gradient(oklch(24.5% 0.007 250) 0%, oklch(20.5% 0.007 250) 100%);
+}
+.text-label {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1rem;
+}
+.text-readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+}
+
+.help-prose { font-size: 0.875rem; line-height: 1.6; color: var(--foreground); }
+.help-prose h2 { font-size: 1.25rem; font-weight: 800; margin: 1.75rem 0 0.75rem; letter-spacing: -0.01em; }
+.help-prose h3 { font-size: 1rem; font-weight: 700; margin: 1.5rem 0 0.5rem; color: var(--primary); }
+.help-prose p { margin: 0.6rem 0; }
+.help-prose ul, .help-prose ol { margin: 0.6rem 0; padding-left: 1.4rem; }
+.help-prose ul { list-style: disc; }
+.help-prose ol { list-style: decimal; }
+.help-prose li { margin: 0.25rem 0; }
+.help-prose a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.help-prose img { max-width: 100%; border-radius: 0.5rem; border: 1px solid var(--border); margin: 0.75rem 0; }
+.help-prose code { font-family: var(--font-mono); font-size: 0.8em; background: var(--rail); padding: 0.1em 0.35em; border-radius: 0.25rem; }
+.help-prose pre { background: var(--rail); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1rem; overflow-x: auto; }
+.help-prose pre code { background: none; padding: 0; }
+.help-prose hr { border: 0; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+.help-prose em { color: var(--muted-foreground); }
